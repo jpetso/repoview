@@ -1,0 +1,5 @@
+; $Id$
+name = Repository Viewer
+description = "Browse repositories for Version Control API backends supporting this functionality."
+dependencies = versioncontrol
+package = Version Control

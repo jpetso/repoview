@@ -1,0 +1,184 @@
+<?php
+// $Id$
+/**
+ * @file
+ * Repository Viewer - Browse repositories for Version Control API backends
+ * supporting this functionality.
+ *
+ * Copyright 2008 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
+ */
+
+/**
+ * Implementation of hook_menu().
+ */
+function repoview_menu($may_cache) {
+  $items = array();
+  $browse_access = user_access('browse version control repositories');
+
+  if ($may_cache) {
+    $items[] = array(
+      'path' => 'repoview',
+      'title' => t('Repositories'),
+      'callback' => 'drupal_get_form',
+      'callback arguments' => array('repoview_selection_form'),
+      'access' => $browse_access,
+      'type' => MENU_SUGGESTED_ITEM,
+    );
+  }
+  else {
+    $repositories = versioncontrol_get_repositories();
+
+    foreach ($repositories as $repo_id => $repository) {
+      $supports_browsing = _repoview_repository_supports_browsing($repository);
+      $items[] = array(
+        'path' => 'repoview/'. $repo_id,
+        'title' => t('Browse @reponame', array('@reponame' => $repository['name'])),
+        'callback' => 'drupal_get_form',
+        'callback arguments' => array('repoview_browser_form', $repository),
+        'access' => $browse_access && $supports_browsing,
+        'type' => MENU_CALLBACK,
+      );
+    }
+  }
+  return $items;
+}
+
+/**
+ * Implementation of hook_perm().
+ */
+function repoview_perm() {
+  return array('browse version control repositories');
+}
+
+
+/**
+ * Function to determine if a VCS backend provides enough functionality
+ * to support browsing.
+ */
+function _repoview_repository_supports_browsing($repository) {
+  $vcs = $repository['vcs'];
+  return versioncontrol_backend_implements($vcs, 'get_item')
+    && versioncontrol_backend_implements($vcs, 'get_directory_contents')
+    /* file contents disabled for testing
+    && versioncontrol_backend_implements($vcs, 'get_file_contents')*/;
+}
+
+/**
+ * Form callback for the "repoview" menu path.
+ */
+function repoview_selection_form() {
+  $form = array();
+  $repositories = versioncontrol_get_repositories();
+
+  foreach ($repositories as $repo_id => $repository) {
+    if (!_repoview_repository_supports_browsing($repository)) {
+      unset($repositories[$repo_id]);
+    }
+  }
+
+  if (empty($repositories)) {
+    $form['empty'] = array(
+      '#value' => '<p>'. t('No repositories available to browse.') .'</p>',
+    );
+    return $form;
+  }
+  if (count($repositories) == 1) {
+    $only_repo = reset($repositories);
+    drupal_goto('repoview/'. $only_repo['repo_id']);
+  }
+
+  $header = array('');
+  $rows = array();
+
+  foreach ($repositories as $repo_id => $repository) {
+    $rows[] = array(l($repository['name'], 'repoview/'. $repo_id));
+  }
+  $form['table'] = array(
+    '#value' => theme('table', $header, $rows),
+  );
+  return $form;
+}
+
+/**
+ * Form callback for the "repoview/$repo_id" menu path.
+ */
+function repoview_browser_form($repository) {
+  $args = func_get_args();
+  array_shift($args); // shift away the repository, we're interested in the rest
+  $path = '/'. join('/', $args);
+
+  $item = versioncontrol_get_item($repository, $path);
+
+  if (versioncontrol_is_directory_item($item)) {
+    return repoview_directory_contents_form($repository, $item);
+  }
+}
+
+function repoview_directory_contents_form($repository, $dir_item) {
+  $form = array();
+  $children = versioncontrol_get_directory_contents($repository, $dir_item);
+  unset($children[$dir_item['path']]);
+
+  if (empty($children)) {
+    $form['empty'] = array(
+      '#value' => '<p>'. t('Directory is empty.') .'</p>',
+    );
+    return $form;
+  }
+  $children = _repoview_item_listing_sort($children);
+
+  $header = array(t('File'), t('Revision'), t('Author'), t('Age'));
+  $rows = array();
+
+  if ($dir_item['path'] != '/') {
+    // First column: file/directory name.
+    $item_link = l('<strong>'. t('Parent directory') .'</strong>',
+      'repoview/'. $repository['repo_id'] .
+        drupal_urlencode(dirname($dir_item['path'])),
+      array(), NULL, NULL, FALSE, TRUE /* $name is checked HTML */
+    );
+
+    // Rest of the columns (even easier).
+    $rows[] = array($item_link, check_plain($item['revision']), '', '');
+  }
+
+  foreach ($children as $path => $item) {
+    // First column: file/directory name.
+    $name = check_plain(basename($item['path']));
+    if (versioncontrol_is_directory_item($item)) {
+      $name = '<strong>'. $name .'/</strong>';
+    }
+    $item_link = l($name,
+      'repoview/'. $repository['repo_id'] . drupal_urlencode($item['path']),
+      array(), NULL, NULL, FALSE, TRUE /* $name is checked HTML */
+    );
+
+    // Rest of the columns (even easier).
+    $rows[] = array($item_link, check_plain($item['revision']), '', '');
+  }
+
+  $form['listing'] = array(
+    '#value' => theme('table', $header, $rows),
+  );
+  return $form;
+}
+
+/**
+ * Sort items by type (directories before files), then name (alphabetically).
+ */
+function _repoview_item_listing_sort($items) {
+  $dirs = array();
+  $files = array();
+
+  foreach ($items as $path => $item) {
+    if (versioncontrol_is_directory_item($item)) {
+      $dirs[$path] = $item;
+    }
+    else {
+      $files[$path] = $item;
+    }
+  }
+  ksort($dirs);
+  ksort($files);
+  return array_merge($dirs, $files);
+}
