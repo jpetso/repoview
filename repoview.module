@@ -6,6 +6,7 @@
  * supporting this functionality.
  *
  * Copyright 2008 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
+ * Copyright 2006, 2007 by Gavin Mogan ("halkeye", http://drupal.org/user/56779)
  */
 
 /**
@@ -32,7 +33,7 @@ function repoview_menu($may_cache) {
       $supports_browsing = _repoview_repository_supports_browsing($repository);
       $items[] = array(
         'path' => 'repoview/'. $repo_id,
-        'title' => t('Browse @reponame', array('@reponame' => $repository['name'])),
+        'title' => t('@reponame', array('@reponame' => $repository['name'])),
         'callback' => 'drupal_get_form',
         'callback arguments' => array('repoview_browser_form', $repository),
         'access' => $browse_access && $supports_browsing,
@@ -100,7 +101,7 @@ function repoview_selection_form() {
 }
 
 /**
- * Form callback for the "repoview/$repo_id" menu path.
+ * Form callback for the "repoview/$repo_id[/...]" menu path.
  */
 function repoview_browser_form($repository) {
   $args = func_get_args();
@@ -108,12 +109,41 @@ function repoview_browser_form($repository) {
   $path = '/'. join('/', $args);
 
   $item = versioncontrol_get_item($repository, $path);
+  _repoview_breadcrumb($repository, $path);
+
+  if (empty($item)) {
+    drupal_set_title(check_plain(basename($path)));
+    $form['empty'] = array(
+      '#value' => '<p>'. t('File or directory doesn\'t exist at this revision, or doesn\'t exist at all.') .'</p>',
+    );
+    return $form;
+  }
+  drupal_set_title(_repoview_title($repository, $item));
 
   if (versioncontrol_is_directory_item($item)) {
     return repoview_directory_contents_form($repository, $item);
   }
+  // Interim measure until we implement fetching from versioncontrol_get_file_contents():
+  $url = versioncontrol_get_url_item_view($repository, &$item);
+  if (!empty($url)) {
+    drupal_goto($url);
+  }
 }
 
+/**
+ * Retrieve the title for the page showing the given item. The result of this
+ * function is supposed to be passed to drupal_set_title() as is.
+ */
+function _repoview_title($repository, $item) {
+  if ($item['path'] == '/') {
+    return check_plain($repository['name']);
+  }
+  return check_plain(basename($item['path']));
+}
+
+/**
+ * Form callback for "repoview/$repo_id[/...]" if the path is a menu item.
+ */
 function repoview_directory_contents_form($repository, $dir_item) {
   $form = array();
   $children = versioncontrol_get_directory_contents($repository, $dir_item);
@@ -181,4 +211,21 @@ function _repoview_item_listing_sort($items) {
   ksort($dirs);
   ksort($files);
   return array_merge($dirs, $files);
+}
+
+function _repoview_breadcrumb($repository, $path) {
+  if ($path == '/') {
+    return; // no need to change the breadcrumb, it's already correct
+  }
+  $breadcrumb = drupal_get_breadcrumb();
+  $parts = explode('/', $path);
+  array_pop($parts); // don't include the last name, we're currently viewing it
+
+  $path = '';
+  foreach ($parts as $part) {
+    $title = empty($part) ? $repository['name'] : $part;
+    $path .= $part .'/';
+    $breadcrumb[] = l($title, 'repoview/'. $repository['repo_id'] . rtrim($path, '/'));
+  }
+  drupal_set_breadcrumb($breadcrumb);
 }
