@@ -126,6 +126,7 @@ function repoview_browser_form($repository) {
     return $form;
   }
   drupal_set_title(_repoview_title($repository, $item));
+  drupal_add_css(drupal_get_path('module', 'repoview') .'/repoview.css');
 
   if (versioncontrol_is_directory_item($item)) {
     return repoview_directory_contents_form($repository, $item);
@@ -159,15 +160,23 @@ function repoview_directory_contents_form($repository, $dir_item) {
 
   if ($dir_item['path'] != '/') {
     $parent_item = versioncontrol_get_parent_item($repository, $dir_item);
+    $item_url = repoview_item_url($repository, $item);
 
-    // First column: file/directory name.
-    $item_link = l('<strong>'. t('Parent directory') .'</strong>',
-      repoview_item_url($repository, $parent_item),
-      array(), NULL, NULL, FALSE, TRUE /* $name is checked HTML */
-    );
+    // First column: image.
+    $image = theme('image', drupal_get_path('module', 'repoview') .'/icons/folder-parent.png');
+    $image_link = l($image, $item_url, array(), NULL, NULL, FALSE,
+                    TRUE /* $image is checked HTML */);
+    $image = '<div class="repoview-item-icon">'. $image_link .'</div>';
+
+    // Second column: directory name.
+    $item_link = l('<strong>'. t('Parent directory') .'</strong>', $item_url,
+      array(), NULL, NULL, FALSE, TRUE /* label is checked HTML */);
 
     // Rest of the columns (even easier).
-    $rows[] = array($item_link, check_plain($item['revision']), '', '');
+    $rows[] = array(
+      '<div class="container-inline">'. $image . $item_link .'</div>',
+      '', '', '',
+    );
   }
 
   if (empty($children)) {
@@ -175,17 +184,28 @@ function repoview_directory_contents_form($repository, $dir_item) {
   }
   else {
     foreach ($children as $path => $item) {
-      // First column: file/directory name.
+      // First & second column: icon & file/directory name.
       $name = check_plain(basename($item['path']));
+      $item_url = repoview_item_url($repository, $item);
+
       if (versioncontrol_is_directory_item($item)) {
+        $image = theme('image', drupal_get_path('module', 'repoview') .'/icons/folder.png');
         $name = '<strong>'. $name .'/</strong>';
       }
-      $item_link = l($name, repoview_item_url($repository, $item),
-        array(), NULL, NULL, FALSE, TRUE /* $name is checked HTML */
-      );
+      else {
+        $image = theme('image', drupal_get_path('module', 'repoview') .'/icons/application-octet-stream.png');
+      }
+      $image_link = l($image, $item_url, array(), NULL, NULL, FALSE,
+                      TRUE /* $image is checked HTML */);
+      $image = '<div class="repoview-item-icon">'. $image_link .'</div>';
+      $item_link = l($name, $item_url, array(), NULL, NULL, FALSE,
+                     TRUE /* $name is checked HTML */);
 
       // Rest of the columns (even easier).
-      $rows[] = array($item_link, check_plain($item['revision']), '', '');
+      $rows[] = array(
+        '<div class="container-inline">'. $image . $item_link .'</div>',
+        check_plain($item['revision']), '', '',
+      );
     }
   }
 
@@ -306,7 +326,6 @@ function repoview_file_contents_form($repository, $file_item, $force_download = 
     // add a link to this same function with $force_download == TRUE,
     // i.e. same path with 'view=download' query attribute (right?).
   }
-  drupal_add_css(drupal_get_path('module', 'repoview') .'/repoview.css');
 
   $form['contents'] = array(
     '#value' => '<div class="repoview-file-contents">'. $contents .'</div>',

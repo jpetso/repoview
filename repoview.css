@@ -25,3 +25,8 @@
   margin-top: 0;
   margin-bottom: 0;
 }
+
+.repoview-item-icon img {
+  margin-bottom: -3px;
+  padding-right: 0.8em;
+}
