@@ -60,9 +60,16 @@ function _repoview_repository_supports_browsing($repository) {
   $vcs = $repository['vcs'];
   return versioncontrol_backend_implements($vcs, 'get_item')
     && versioncontrol_backend_implements($vcs, 'get_directory_contents')
-    /* file contents disabled for testing
-    && versioncontrol_backend_implements($vcs, 'get_file_contents')*/;
+    && versioncontrol_backend_implements($vcs, 'get_file_copy');
 }
+
+/**
+ * Return the URL for viewing a given item with repoview.
+ */
+function repoview_item_url($repository, $item) {
+  return 'repoview/'. $repository['repo_id'] . drupal_urlencode($item['path']);
+}
+
 
 /**
  * Form callback for the "repoview" menu path.
@@ -123,11 +130,7 @@ function repoview_browser_form($repository) {
   if (versioncontrol_is_directory_item($item)) {
     return repoview_directory_contents_form($repository, $item);
   }
-  // Interim measure until we implement fetching from versioncontrol_get_file_contents():
-  $url = versioncontrol_get_url_item_view($repository, &$item);
-  if (!empty($url)) {
-    drupal_goto($url);
-  }
+  return repoview_file_contents_form($repository, $item);
 }
 
 /**
@@ -142,29 +145,24 @@ function _repoview_title($repository, $item) {
 }
 
 /**
- * Form callback for "repoview/$repo_id[/...]" if the path is a menu item.
+ * Form callback for "repoview/$repo_id[/...]" if the path is a directory item.
  */
 function repoview_directory_contents_form($repository, $dir_item) {
   $form = array();
   $children = versioncontrol_get_directory_contents($repository, $dir_item);
   unset($children[$dir_item['path']]);
 
-  if (empty($children)) {
-    $form['empty'] = array(
-      '#value' => '<p>'. t('Directory is empty.') .'</p>',
-    );
-    return $form;
-  }
   $children = _repoview_item_listing_sort($children);
 
   $header = array(t('File'), t('Revision'), t('Author'), t('Age'));
   $rows = array();
 
   if ($dir_item['path'] != '/') {
+    $parent_item = versioncontrol_get_parent_item($repository, $dir_item);
+
     // First column: file/directory name.
     $item_link = l('<strong>'. t('Parent directory') .'</strong>',
-      'repoview/'. $repository['repo_id'] .
-        drupal_urlencode(dirname($dir_item['path'])),
+      repoview_item_url($repository, $parent_item),
       array(), NULL, NULL, FALSE, TRUE /* $name is checked HTML */
     );
 
@@ -172,19 +170,23 @@ function repoview_directory_contents_form($repository, $dir_item) {
     $rows[] = array($item_link, check_plain($item['revision']), '', '');
   }
 
-  foreach ($children as $path => $item) {
-    // First column: file/directory name.
-    $name = check_plain(basename($item['path']));
-    if (versioncontrol_is_directory_item($item)) {
-      $name = '<strong>'. $name .'/</strong>';
-    }
-    $item_link = l($name,
-      'repoview/'. $repository['repo_id'] . drupal_urlencode($item['path']),
-      array(), NULL, NULL, FALSE, TRUE /* $name is checked HTML */
-    );
+  if (empty($children)) {
+    $rows[] = array(t('Directory is empty.'), '', '', '');
+  }
+  else {
+    foreach ($children as $path => $item) {
+      // First column: file/directory name.
+      $name = check_plain(basename($item['path']));
+      if (versioncontrol_is_directory_item($item)) {
+        $name = '<strong>'. $name .'/</strong>';
+      }
+      $item_link = l($name, repoview_item_url($repository, $item),
+        array(), NULL, NULL, FALSE, TRUE /* $name is checked HTML */
+      );
 
-    // Rest of the columns (even easier).
-    $rows[] = array($item_link, check_plain($item['revision']), '', '');
+      // Rest of the columns (even easier).
+      $rows[] = array($item_link, check_plain($item['revision']), '', '');
+    }
   }
 
   $form['listing'] = array(
@@ -213,6 +215,9 @@ function _repoview_item_listing_sort($items) {
   return array_merge($dirs, $files);
 }
 
+/**
+ * Set the breadcrumb according to the given repository and path.
+ */
 function _repoview_breadcrumb($repository, $path) {
   if ($path == '/') {
     return; // no need to change the breadcrumb, it's already correct
@@ -228,4 +233,91 @@ function _repoview_breadcrumb($repository, $path) {
     $breadcrumb[] = l($title, 'repoview/'. $repository['repo_id'] . rtrim($path, '/'));
   }
   drupal_set_breadcrumb($breadcrumb);
+}
+
+/**
+ * Form callback for "repoview/$repo_id[/...]" if the path is a file item.
+ */
+function repoview_file_contents_form($repository, $file_item, $force_download = FALSE) {
+  $form = array();
+  $filepath = versioncontrol_get_file_copy($repository, $file_item);
+
+  if (empty($filepath)) {
+    $form['error'] = array(
+      '#value' => '<p>'. t('Error accessing the file.') .'</p>',
+    );
+    return $form;
+  }
+
+  // Retrieve the mimetype of the file - if possible, because that function is
+  // deprecated and the fileinfo PECL extension seems not to be built into
+  // PHP 5 at least.
+  if (function_exists('mime_content_type')) {
+    $mimetype = mime_content_type($filepath);
+  }
+  $is_text = $is_image = FALSE;
+
+  if (isset($mimetype) && (strpos($mimetype, 'text/') !== FALSE)) {
+    $is_text = TRUE;
+  }
+  if (isset($mimetype) && in_array($mimetype, array('image/png', 'image/jpeg', 'image/gif'))) {
+    $is_image = TRUE;
+  }
+
+  // We don't want to show normal binary files, let's just transfer them as is.
+  if ($force_download || (!$is_text /*&& !$is_image ...later */)) {
+    // Also, make sure we delete the file even if file_transfer() exits.
+    register_shutdown_function('_repoview_delete_file_copy', $filepath);
+
+    // Transfer the file!
+    $headers = array(
+      'Content-Type: '. mime_header_encode($mimetype),
+      'Content-Length: '. filesize($filepath),
+      // Force file download and set the default target filename.
+      'Content-Disposition: attachment; filename="'. basename($file_item['path']) .'";',
+    );
+    file_transfer($filepath, $headers);
+    // exit(); -- called by file_transfer()
+  }
+
+  if ($is_text) {
+    // Cool, it's a text file. Let's display it in a nice table with a row
+    // for each line. (repoview.css makes sure it looks nice.)
+    $lines = file($filepath);
+    _repoview_delete_file_copy($filepath);
+
+    $linecount = 1;
+    $line_numbers = '';
+    $content = '';
+    $header = array();
+    $rows = array();
+
+    foreach ($lines as $line) {
+      $rows[] = array(
+        '<pre>'. $linecount .'</pre>',
+        '<pre>'. trim(check_plain($line), "\n\r") .'</pre>'
+      );
+      ++$linecount;
+    }
+    $contents = theme('table', $header, $rows, $attributes);
+    $contents = '<div class="repoview-file-contents-text">'. $contents .'</div>';
+  }
+  else if ($is_image) {
+    // add a link to this same function with $force_download == TRUE,
+    // i.e. same path with 'view=download' query attribute (right?).
+  }
+  drupal_add_css(drupal_get_path('module', 'repoview') .'/repoview.css');
+
+  $form['contents'] = array(
+    '#value' => '<div class="repoview-file-contents">'. $contents .'</div>',
+  );
+  return $form;
+}
+
+/**
+ * Registered shutdown function, called after the request has ended:
+ * Delete the file copy that versioncontrol_get_file_copy() had created.
+ */
+function _repoview_delete_file_copy($file_path) {
+  @unlink($file_path);
 }

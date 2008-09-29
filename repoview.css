@@ -1,0 +1,27 @@
+/* $Id$ */
+
+.repoview-file-contents-text table {
+  border: 1px solid #CCCCCC;
+}
+
+.repoview-file-contents-text tr.even, .repoview-file-contents-text tr.odd {
+  border-top-width: 0;
+  border-bottom-width: 0;
+}
+
+.repoview-file-contents-text td {
+  border-left: 1px solid #CCCCCC;
+  border-right: 1px solid #CCCCCC;
+}
+
+.repoview-file-contents-text pre {
+  padding-right: 0;
+}
+
+.repoview-file-contents-text tr.even, .repoview-file-contents-text tr.odd,
+.repoview-file-contents-text td, .repoview-file-contents-text pre {
+  padding-top: 0;
+  padding-bottom: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+}
