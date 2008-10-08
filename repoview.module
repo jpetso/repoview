@@ -155,7 +155,7 @@ function repoview_directory_contents_form($repository, $dir_item) {
 
   $children = _repoview_item_listing_sort($children);
 
-  $header = array(t('File'), t('Revision'), t('Author'), t('Age'));
+  $header = array(t('File'), t('Rev.'), t('Author'), t('Age'), t('Message'));
   $rows = array();
 
   if ($dir_item['path'] != '/') {
@@ -175,14 +175,16 @@ function repoview_directory_contents_form($repository, $dir_item) {
     // Rest of the columns (even easier).
     $rows[] = array(
       '<div class="container-inline">'. $image . $item_link .'</div>',
-      '', '', '',
+      '', '', '', ''
     );
   }
 
   if (empty($children)) {
-    $rows[] = array(t('Directory is empty.'), '', '', '');
+    $rows[] = array(t('Directory is empty.'), '', '', '', '');
   }
   else {
+    versioncontrol_fetch_item_commit_operations($repository, $children);
+
     foreach ($children as $path => $item) {
       // First & second column: icon & file/directory name.
       $name = check_plain(basename($item['path']));
@@ -201,10 +203,32 @@ function repoview_directory_contents_form($repository, $dir_item) {
       $item_link = l($name, $item_url, array(), NULL, NULL, FALSE,
                      TRUE /* $name is checked HTML */);
 
-      // Rest of the columns (even easier).
+      // Author and commit message columns.
+      if (empty($item['commit_operation'])) {
+        $author = '';
+        $age = '';
+        $message = '';
+      }
+      else {
+        $operation = $item['commit_operation'];
+        $author = theme('versioncontrol_account_username',
+          $operation['uid'], $operation['username'], $repository, FALSE
+        );
+        $age = t('!time ago', array(
+          '!time' => format_interval(time() - $operation['date'], 1),
+        ));
+
+        $message = $operation['message'];
+        if (strlen($message) > 60) {
+          $message = substr($message, 0, 57) .'...';
+        }
+        $message = check_plain($message);
+      }
+
+      // Combine all of these texts into a single row.
       $rows[] = array(
         '<div class="container-inline">'. $image . $item_link .'</div>',
-        check_plain($item['revision']), '', '',
+        check_plain($item['revision']), $author, $age, $message,
       );
     }
   }
