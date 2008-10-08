@@ -218,11 +218,14 @@ function repoview_directory_contents_form($repository, $dir_item) {
           '!time' => format_interval(time() - $operation['date'], 1),
         ));
 
-        $message = $operation['message'];
-        if (strlen($message) > 60) {
-          $message = substr($message, 0, 57) .'...';
+        if (strlen($operation['message']) <= 60) {
+          $message = check_plain($operation['message']);
         }
-        $message = check_plain($message);
+        else {
+          $tooltip = check_plain($operation['message']);
+          $message = check_plain(substr($operation['message'], 0, 57)) .'...';
+          $message = '<span title="'. $tooltip .'">'. $message .'</span>';
+        }
       }
 
       // Combine all of these texts into a single row.
