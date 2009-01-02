@@ -1,5 +1,6 @@
 ; $Id$
 name = Repository Viewer
 description = "Browse repositories for Version Control API backends supporting this functionality."
-dependencies = versioncontrol
+dependencies[] = versioncontrol
 package = Version Control
+core = 6.x
