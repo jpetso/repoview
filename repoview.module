@@ -151,6 +151,13 @@ function _repoview_title($repository, $item) {
 function repoview_directory_contents_form($repository, $dir_item) {
   $form = array();
   $children = versioncontrol_get_directory_contents($repository, $dir_item);
+
+  if (!isset($children)) {
+    $form['empty'] = array(
+      '#value' => '<p>'. t('Unable to fetch directory contents.') .'</p>',
+    );
+    return $form;
+  }
   unset($children[$dir_item['path']]);
 
   $children = _repoview_item_listing_sort($children);
@@ -160,7 +167,7 @@ function repoview_directory_contents_form($repository, $dir_item) {
 
   if ($dir_item['path'] != '/') {
     $parent_item = versioncontrol_get_parent_item($repository, $dir_item);
-    $item_url = repoview_item_url($repository, $item);
+    $item_url = repoview_item_url($repository, $parent_item);
 
     // First column: image.
     $image = theme('image', drupal_get_path('module', 'repoview') .'/icons/folder-parent.png');
