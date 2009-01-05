@@ -5,43 +5,65 @@
  * Repository Viewer - Browse repositories for Version Control API backends
  * supporting this functionality.
  *
- * Copyright 2008 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
+ * Copyright 2008, 2009 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
  * Copyright 2006, 2007 by Gavin Mogan ("halkeye", http://drupal.org/user/56779)
  */
 
 /**
  * Implementation of hook_menu().
  */
-function repoview_menu($may_cache) {
+function repoview_menu() {
   $items = array();
-  $browse_access = user_access('browse version control repositories');
+  $browse_access = 'browse version control repositories';
 
-  if ($may_cache) {
-    $items[] = array(
-      'path' => 'repoview',
-      'title' => t('Repositories'),
-      'callback' => 'drupal_get_form',
-      'callback arguments' => array('repoview_selection_form'),
-      'access' => $browse_access,
-      'type' => MENU_SUGGESTED_ITEM,
-    );
-  }
-  else {
-    $repositories = versioncontrol_get_repositories();
-
-    foreach ($repositories as $repo_id => $repository) {
-      $supports_browsing = _repoview_repository_supports_browsing($repository);
-      $items[] = array(
-        'path' => 'repoview/'. $repo_id,
-        'title' => t('@reponame', array('@reponame' => $repository['name'])),
-        'callback' => 'drupal_get_form',
-        'callback arguments' => array('repoview_browser_form', $repository),
-        'access' => $browse_access && $supports_browsing,
-        'type' => MENU_CALLBACK,
-      );
-    }
-  }
+  $items['repoview'] = array(
+    'title' => t('Repositories'),
+    'callback' => 'drupal_get_form',
+    'callback arguments' => array('repoview_selection_form'),
+    'access' => array($browse_access),
+    'type' => MENU_SUGGESTED_ITEM,
+  );
+  $items['repoview/%repoview_location'] = array(
+    'title callback' => 'repoview_repository_title',
+    'title arguments' => array(1),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('repoview_browser_form', 1),
+    'access arguments' => array($browse_access),
+    'load arguments' => array('%map', '%index'),
+    'type' => MENU_CALLBACK,
+  );
   return $items;
+}
+
+/**
+ * Menu wildcard loader for a repository location ('%repoview_location') that
+ * can be browsed with Repoview. Returns FALSE if the repository is not
+ * browsable, but does not check if the item in the repository actually exists.
+ * If the repository is browsable, this function returns an associative array
+ * with keys 'repository' and 'path' filled in. Requires array('%map', '%index')
+ * as load arguments so that the item path can be loaded correctly.
+ */
+function repoview_location_load($repo_id, $map_array, $index) {
+  $repository = versioncontrol_repository_load($repo_id);
+
+  if (!$repository || !_repoview_repository_supports_browsing($repository)) {
+    return FALSE;
+  }
+  // Construct the path out of the trailing menu path arguments.
+  $path = (count($map_array) > $index + 1)
+    ? '/'. join('/', array_slice($map_array, $index + 1))
+    : '/';
+  return array('repository' => $repository, 'path' => $path);
+}
+
+/**
+ * Title callback for a repository location loaded by repoview_location_load().
+ */
+function repoview_location_title($location) {
+  if ($location['path'] != '/') {
+    return check_plain($location['repository']['name']);
+  }
+  return check_plain(basename($location['path']));
 }
 
 /**
@@ -72,7 +94,7 @@ function repoview_item_url($repository, $item) {
 
 
 /**
- * Form callback for the "repoview" menu path.
+ * Form callback for the 'repoview' menu path.
  */
 function repoview_selection_form() {
   $form = array();
@@ -108,12 +130,11 @@ function repoview_selection_form() {
 }
 
 /**
- * Form callback for the "repoview/$repo_id[/...]" menu path.
+ * Form callback for the 'repoview/%repoview_location[/...]' menu path.
  */
-function repoview_browser_form($repository) {
-  $args = func_get_args();
-  array_shift($args); // shift away the repository, we're interested in the rest
-  $path = '/'. join('/', $args);
+function repoview_browser_form($location) {
+  $repository = $location['repository'];
+  $path = $location['path'];
 
   $item = versioncontrol_get_item($repository, $path);
   _repoview_breadcrumb($repository, $path);
@@ -125,7 +146,6 @@ function repoview_browser_form($repository) {
     );
     return $form;
   }
-  drupal_set_title(_repoview_title($repository, $item));
   drupal_add_css(drupal_get_path('module', 'repoview') .'/repoview.css');
 
   if (versioncontrol_is_directory_item($item)) {
@@ -135,18 +155,8 @@ function repoview_browser_form($repository) {
 }
 
 /**
- * Retrieve the title for the page showing the given item. The result of this
- * function is supposed to be passed to drupal_set_title() as is.
- */
-function _repoview_title($repository, $item) {
-  if ($item['path'] == '/') {
-    return check_plain($repository['name']);
-  }
-  return check_plain(basename($item['path']));
-}
-
-/**
- * Form callback for "repoview/$repo_id[/...]" if the path is a directory item.
+ * Form callback for 'repoview/%repoview_location[/...]'
+ * if the path is a directory item.
  */
 function repoview_directory_contents_form($repository, $dir_item) {
   $form = array();
@@ -290,7 +300,8 @@ function _repoview_breadcrumb($repository, $path) {
 }
 
 /**
- * Form callback for "repoview/$repo_id[/...]" if the path is a file item.
+ * Form callback for 'repoview/%repoview_location[/...]'
+ * if the path is a file item.
  */
 function repoview_file_contents_form($repository, $file_item, $force_download = FALSE) {
   $form = array();
