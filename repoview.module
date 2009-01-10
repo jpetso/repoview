@@ -181,13 +181,11 @@ function repoview_directory_contents_form($repository, $dir_item) {
 
     // First column: image.
     $image = theme('image', drupal_get_path('module', 'repoview') .'/icons/folder-parent.png');
-    $image_link = l($image, $item_url, array(), NULL, NULL, FALSE,
-                    TRUE /* $image is checked HTML */);
+    $image_link = l($image, $item_url, array('html' => TRUE));
     $image = '<div class="repoview-item-icon">'. $image_link .'</div>';
 
     // Second column: directory name.
-    $item_link = l('<strong>'. t('Parent directory') .'</strong>', $item_url,
-      array(), NULL, NULL, FALSE, TRUE /* label is checked HTML */);
+    $item_link = l('<strong>'. t('Parent directory') .'</strong>', $item_url, array('html' => TRUE));
 
     // Rest of the columns (even easier).
     $rows[] = array(
@@ -214,11 +212,9 @@ function repoview_directory_contents_form($repository, $dir_item) {
       else {
         $image = theme('image', drupal_get_path('module', 'repoview') .'/icons/application-octet-stream.png');
       }
-      $image_link = l($image, $item_url, array(), NULL, NULL, FALSE,
-                      TRUE /* $image is checked HTML */);
+      $image_link = l($image, $item_url, array('html' => TRUE));
       $image = '<div class="repoview-item-icon">'. $image_link .'</div>';
-      $item_link = l($name, $item_url, array(), NULL, NULL, FALSE,
-                     TRUE /* $name is checked HTML */);
+      $item_link = l($name, $item_url, array('html' => TRUE));
 
       // Author and commit message columns.
       if (empty($item['commit_operation'])) {
