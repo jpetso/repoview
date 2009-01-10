@@ -17,7 +17,7 @@ function repoview_menu() {
   $browse_access = 'browse version control repositories';
 
   $items['repoview'] = array(
-    'title' => t('Repositories'),
+    'title' => 'Repositories',
     'callback' => 'drupal_get_form',
     'callback arguments' => array('repoview_selection_form'),
     'access' => array($browse_access),
@@ -96,7 +96,7 @@ function repoview_item_url($repository, $item) {
 /**
  * Form callback for the 'repoview' menu path.
  */
-function repoview_selection_form() {
+function repoview_selection_form($form_state) {
   $form = array();
   $repositories = versioncontrol_get_repositories();
 
@@ -132,7 +132,7 @@ function repoview_selection_form() {
 /**
  * Form callback for the 'repoview/%repoview_location[/...]' menu path.
  */
-function repoview_browser_form($location) {
+function repoview_browser_form($form_state, $location) {
   $repository = $location['repository'];
   $path = $location['path'];
 
@@ -149,16 +149,16 @@ function repoview_browser_form($location) {
   drupal_add_css(drupal_get_path('module', 'repoview') .'/repoview.css');
 
   if (versioncontrol_is_directory_item($item)) {
-    return repoview_directory_contents_form($repository, $item);
+    return repoview_directory_contents_form($form_state, $repository, $item);
   }
-  return repoview_file_contents_form($repository, $item);
+  return repoview_file_contents_form($form_state, $repository, $item);
 }
 
 /**
  * Form callback for 'repoview/%repoview_location[/...]'
  * if the path is a directory item.
  */
-function repoview_directory_contents_form($repository, $dir_item) {
+function repoview_directory_contents_form($form_state, $repository, $dir_item) {
   $form = array();
   $children = versioncontrol_get_directory_contents($repository, $dir_item);
 
@@ -231,12 +231,12 @@ function repoview_directory_contents_form($repository, $dir_item) {
           '!time' => format_interval(time() - $operation['date'], 1),
         ));
 
-        if (strlen($operation['message']) <= 60) {
+        if (drupal_strlen($operation['message']) <= 60) {
           $message = check_plain($operation['message']);
         }
         else {
           $tooltip = check_plain($operation['message']);
-          $message = check_plain(substr($operation['message'], 0, 57)) .'...';
+          $message = check_plain(drupal_substr($operation['message'], 0, 57)) .'...';
           $message = '<span title="'. $tooltip .'">'. $message .'</span>';
         }
       }
@@ -299,7 +299,7 @@ function _repoview_breadcrumb($repository, $path) {
  * Form callback for 'repoview/%repoview_location[/...]'
  * if the path is a file item.
  */
-function repoview_file_contents_form($repository, $file_item, $force_download = FALSE) {
+function repoview_file_contents_form($form_state, $repository, $file_item, $force_download = FALSE) {
   $form = array();
   $filepath = versioncontrol_get_file_copy($repository, $file_item);
 
@@ -326,7 +326,7 @@ function repoview_file_contents_form($repository, $file_item, $force_download = 
   }
 
   // We don't want to show normal binary files, let's just transfer them as is.
-  if ($force_download || (!$is_text /*&& !$is_image ...later */)) {
+  if ($force_download || (!$is_text /* && !$is_image ...later */)) {
     // Also, make sure we delete the file even if file_transfer() exits.
     register_shutdown_function('_repoview_delete_file_copy', $filepath);
 
