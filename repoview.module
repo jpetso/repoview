@@ -18,13 +18,13 @@ function repoview_menu() {
 
   $items['repoview'] = array(
     'title' => 'Repositories',
-    'callback' => 'drupal_get_form',
-    'callback arguments' => array('repoview_selection_form'),
-    'access' => array($browse_access),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('repoview_selection_form'),
+    'access arguments' => array($browse_access),
     'type' => MENU_SUGGESTED_ITEM,
   );
   $items['repoview/%repoview_location'] = array(
-    'title callback' => 'repoview_repository_title',
+    'title callback' => 'repoview_location_title',
     'title arguments' => array(1),
     'page callback' => 'drupal_get_form',
     'page arguments' => array('repoview_browser_form', 1),
