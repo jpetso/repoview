@@ -82,7 +82,7 @@ function _repoview_repository_supports_browsing($repository) {
   $vcs = $repository['vcs'];
   return versioncontrol_backend_implements($vcs, 'get_item')
     && versioncontrol_backend_implements($vcs, 'get_directory_contents')
-    && versioncontrol_backend_implements($vcs, 'get_file_copy');
+    && versioncontrol_backend_implements($vcs, 'export_file');
 }
 
 /**
@@ -301,7 +301,7 @@ function _repoview_breadcrumb($repository, $path) {
  */
 function repoview_file_contents_form($form_state, $repository, $file_item, $force_download = FALSE) {
   $form = array();
-  $filepath = versioncontrol_get_file_copy($repository, $file_item);
+  $filepath = versioncontrol_export_file($repository, $file_item);
 
   if (empty($filepath)) {
     $form['error'] = array(
@@ -376,7 +376,7 @@ function repoview_file_contents_form($form_state, $repository, $file_item, $forc
 
 /**
  * Registered shutdown function, called after the request has ended:
- * Delete the file copy that versioncontrol_get_file_copy() had created.
+ * Delete the file copy that versioncontrol_export_file() had created.
  */
 function _repoview_delete_file_copy($file_path) {
   @unlink($file_path);
